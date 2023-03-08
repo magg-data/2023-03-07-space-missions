@@ -1,0 +1,613 @@
+---
+title: "Space Missions 1957/04/10 - 2022/07/29"
+# author: "MG" 
+# Adjusting this dashboard to show it off at kaggle.com was very painful.
+# Do not be too hard on me for this presentation ... but it's done! Thanks!
+date: "Modified: `r Sys.Date()`"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+    orientation: rows
+    social: menu
+    source_code: embed
+---
+
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+# to install flexdashboard
+#install.packages("flexdashboard")
+
+# flexdashboard intro
+# https://pkgs.rstudio.com/flexdashboard/articles/flexdashboard.html
+
+library(knitr)
+
+# for not outputting echo
+knitr::opts_chunk$set(echo = FALSE, results='hide', message=FALSE, warning=FALSE)
+
+```
+
+
+
+
+
+
+
+    
+
+
+
+
+```{r}
+# the default timeframe of the dataframe
+LAUNCH_PERIOD="10/4/1957 - 7/29/2022"
+LAUNCH_PERIOD_DOT=paste0(LAUNCH_PERIOD, ".")
+
+# most intense color 
+MOST_INTENSE_COLOR="#132B43"  # dark blue
+LEAST_INTENSE_COLOR="#56B1F7" # light blue
+
+# read the csv file
+library(readr)
+# df <- read_csv('../mission-all-fields.csv')
+df <- read_csv('../input/space-missions-1957-2022/mission-all-fields.csv')
+
+library(dplyr)
+
+# we will be modifying df so making a copy
+df_facility <- df
+# concatenate Facility, State, Area and skip NA values
+df_facility$Place <- apply(df[,3:5], 1, function(x) paste(na.omit(x), collapse = ", "))
+# how many NA is per column in df_facility
+sapply(df_facility, function(x) sum(is.na(x)))
+
+# ------------------
+# for launches
+# -----------------
+
+# find total number of launches per place and their successes and failures
+mission_status_df <- df_facility %>% group_by(Place) %>% 
+  summarize(Total = n(), 
+            Success = sum(MissionStatus == 1), 
+            Failure = sum(MissionStatus == 2),
+            PartialFailure = sum(MissionStatus == 3),
+            PrelaunchFailure = sum(MissionStatus == 4),
+            JustFailure = Total - Success) %>% 
+  arrange(Place)
+
+# add abbreviation for diagrams
+mission_status_df$PlaceAbbrv  <- abbreviate(mission_status_df$Place, minlength = 45)
+
+# have percentages ready for use
+total_launches <- sum(mission_status_df$Total)
+
+library(scales)
+
+#' Compute the percentage
+#' @param value Value to be presented as percentage
+#' @param digi What precision, how many digits after decimal point
+#' @return rounded value with digi digits after decimal point
+percentage <- function(value, digi) {
+  round(value*100, digits = digi)
+}
+
+# total percent success and total percent of failures
+#mission_status_df$SuccessPercent <- percent(mission_status_df$Success/total_launches, accuracy = 0.1)
+#mission_status_df$FailurePercent <- percent(mission_status_df$JustFailure/total_launches, accuracy = 0.1)
+mission_status_df$SuccessPercent <- percentage(mission_status_df$Success/total_launches, 1)
+mission_status_df$FailurePercent <- percentage(mission_status_df$JustFailure/total_launches, 1)
+mission_status_df$TotalPercent <- percentage(mission_status_df$Total/total_launches, 1)
+mission_status_df$RelSuccessPerc <- percentage(mission_status_df$Success/mission_status_df$Total, 1)
+mission_status_df$RelFailurePerc <- percentage(mission_status_df$JustFailure/mission_status_df$Total, 1)
+
+# find out total number of successes, failures and others
+totals_df <- colSums(mission_status_df[,2:6])
+```
+
+Facilities {data-orientation=columns}
+====================================================
+Column {data-width=150}
+-------------------------------------------------------
+
+### Global No. of Launches
+
+```{r, results='markup'}
+valueBox(total_launches, icon="fa-rocket")
+```
+
+### No. of Launching Countries/Locations
+
+```{r, results='markup'}
+valueBox(nrow(df_facility %>% distinct(Area)), icon="glyphicon-map-marker")
+```
+
+### No. of Launching Facilities
+
+```{r, results='markup'}
+valueBox(nrow(df_facility %>% distinct(Place)), icon="fa-building")
+# {.tabset .tabset-fade}
+```
+
+Column {.tabset .tabset-fade}
+--------------------------------------
+### Facilities per Country {.no-padding}
+
+```{r}
+# get the number of facilities per country
+countries_facilities_df <- df_facility %>% select(Area, Facility) %>% distinct(Facility, Area) %>% group_by(Area) %>% summarize(FacilityCount = n()) %>% arrange(desc(FacilityCount))
+
+# add the percentage column
+facilities_count <- sum(countries_facilities_df$FacilityCount)
+countries_facilities_df$Percent <- percentage(countries_facilities_df$FacilityCount / facilities_count, 0)
+
+hist(countries_facilities_df$FacilityCount,
+     xlab = "No. of Launching Facilities", 
+     ylab = "No. of Countries",
+     labels=TRUE, 
+     xlim = c(0, 20),
+     ylim = c(0, 20),
+     main = paste0('Histogram of no. of facilities per country.\n',
+                   'Most countries had at most 2 launching facilities.')
+    )
+axis(side = 1, at = seq(0,20, 1))
+```
+<!-- > Most countries had $\le$ 2 launching facilities. -->
+
+### Launches per Facility {.no-padding}
+
+```{r}
+hist(mission_status_df$Total,
+     xlab = "No. of Launches", 
+     ylab = "No. of Facilities",
+     ylim=c(0,50),
+     labels=TRUE,
+     main = paste0('Histogram of no. of launches per facility.\n',
+                  percentage(41/nrow(df_facility %>% distinct(Place)),0), '%',
+    ' facilities performed <= 200 launches.'))
+```
+
+<!-- > `r paste0(percentage(41/nrow(df_facility %>% distinct(Place)),0), '%')` facilities performed no more than 200 launches. -->
+
+<!--
+### Facilities with <= 200 launches {data-width=100}
+
+```{r, results='markup'}
+gauge(percentage(41/nrow(df_facility %>% distinct(Place)),0), min = 0, max = 100, symbol = '%'
+      )
+```
+-->
+
+Column
+-----------------------------
+
+### Percent of facilities located in a country.  {.no-padding .no-title}
+
+```{r, fig.height=8}
+library(ggplot2)
+ggplot(data=countries_facilities_df, aes(reorder(Area, Percent), Percent, fill=Percent)) +
+  geom_bar(stat="identity") +
+  geom_text(aes(label = Percent), vjust=0.5, hjust=-0.3) +
+  scale_fill_continuous(high = MOST_INTENSE_COLOR, low = LEAST_INTENSE_COLOR) +
+  scale_y_continuous(limits= c(0,37)) +
+  xlab('Facility Location') +
+  ylab('[%] of Total No. of Facilities') +
+  coord_flip() +
+  labs(fill='% Facilities\nLocated\nin Country', 
+       title='Percent of facilities located in a country.',
+      subtitle='Rockets were launched off of vessels for Yellow Sea and Barents Sea.')
+```
+
+<!-- > Rockets were launched off of vessels for Yellow Sea and Barents Sea. -->
+
+By Location {data-orientation=rows data-navmenu="Launches" data-navmenu-icon="fa-rocket"}
+====================================================
+
+Row {data-height=150}
+----------------------------
+### Global No. of Launches
+
+```{r, results='markup'}
+valueBox(total_launches, icon="fa-rocket")
+```
+       
+Row {data-height=600}
+-------------------------------------
+### Locations/countries w.r.t. the global no. of launches. {.no-padding .no-title}
+
+```{r, fig.width=6}
+# launches per location/country
+
+launches_per_loc_df <- df_facility %>%
+  group_by(Area) %>%
+  summarize(Total = n(), Percent = percentage(Total/ total_launches, 1)) %>%
+  arrange(desc(Total))
+
+launches_per_loc_df %>% select (Area, Percent) %>% 
+  ggplot(aes(reorder(Area, Percent), Percent, fill=Percent)) +
+  geom_bar(position=position_dodge(), stat="identity") +
+  geom_text(aes(label = Percent), vjust=0.5, hjust=-0.3) +
+  scale_fill_continuous(high = MOST_INTENSE_COLOR, low = LEAST_INTENSE_COLOR) +
+  xlab('Location/Country') +
+  ylab('[%] of Total Launches') +
+  ylim(0,35) +
+  coord_flip() +
+  labs(fill='Percent', 
+       title=paste('Locations/countries w.r.t. the global no. of launches.'),
+       subtitle=paste('Top five countries/locations accounted for\n',
+                     'over 92% of global launches.')
+      )
+```
+
+<!-- > Top five countries/locations accounted for over 92% of global launches. -->
+
+### Top 10 launching facilities w.r.t. the total number of launches. {.no-padding .no-title}
+
+```{r, fig.width=6}
+mission_status_df %>%
+  select(PlaceAbbrv, TotalPercent) %>%
+  arrange(desc(TotalPercent)) %>%
+  head(10) %>%
+  ggplot(aes(reorder(PlaceAbbrv, TotalPercent), TotalPercent, fill=TotalPercent)) +
+  geom_bar(position=position_dodge(), stat="identity") +
+  geom_text(aes(label = TotalPercent), vjust=0.5, hjust=-0.3) +
+  scale_fill_continuous(high = MOST_INTENSE_COLOR, low = LEAST_INTENSE_COLOR) +
+  xlab('Facility') +
+  ylab('% of Total Launches') +
+  ylim(0,30) +
+  coord_flip() +
+  labs(fill='Percent', 
+       title='Top 10 launching facilities.'
+      #subtitle=paste('There were', total_launches,   'launches in total.')
+      )
+```
+
+By Year {data-orientation=columns data-navmenu="Launches"}
+====================================================
+
+Column {.no-padding data-width=300}
+------------------
+### Global No. of Launches
+
+```{r, results='markup'}
+valueBox(total_launches, icon="fa-rocket")
+```
+
+### Space mission launch successes and failures. {.no-title .no-padding}
+
+```{r, fig.width=8}
+# install.packages("lessR")
+library(lessR)
+
+counts_c <- totals_df[2:5]
+# Color palette
+colors <- hcl.colors(length(counts_c), "Blues")
+pc(counts_c, 
+   radius = 1,
+   hole = 0.50,
+   data = counts_c,
+   fill=colors,
+   values_size = 1.55,
+   labels_cex=1.55,
+   main_cex=1.55,
+   main='Space missions launch successes and failures.')
+```
+
+
+```{r}
+# how many launches per year
+#install.packages("lubridate")
+library(lubridate)
+
+# get the year from the date
+# for some reason this does not work but it works in a R script
+# #years_vec <- format(as.Date(df$Date, format="%Y-%m-%d"),"%Y")
+years_vec <- year(mdy(df$Date))
+
+# table() will get you the frequency table
+years_df <- as_data_frame(table(years_vec))
+
+# rename the columns names
+colnames(years_df) <- c('Year', 'LaunchesCount')
+
+# 'Year' is factor (see class(years_df$Year)), so it contains levels
+# we want to convert it to numeric values and it is done via
+# converting to a character and numeric
+years_df$Year <- as.numeric(as.character(years_df$Year))
+
+# add the percentage relative to the total launches
+years_df$Percent <- percentage(years_df$LaunchesCount/total_launches,1)
+
+# when is the maximum number of launches
+max_number_of_launches <- years_df %>% filter( years_df$LaunchesCount == max(years_df$LaunchesCount))
+# when the minimum number of launches occurred
+min_number_of_launches <- years_df %>% filter( years_df$LaunchesCount == min(years_df$LaunchesCount))
+
+# fast method for finding the second lowest; 
+second_lowest <- sort(years_df$LaunchesCount,partial=2)[2]
+second_min <- years_df %>% filter( years_df$LaunchesCount == second_lowest)
+```
+
+Column {.no-padding .tabset .tabset-fade data-width=700}
+------------------------
+       
+### Top 10 years with the most launches {.no-title .no-padding}
+
+```{r, fig.height=4}
+most_launches_per_year <- years_df %>%
+  arrange(desc(LaunchesCount), desc(Year)) %>%
+  head(10)
+# without conversion to a character it treats is as numerical values
+# and displays accordingingly at the year axis (i.e., with gaps)
+most_launches_per_year$Year <- as.character(most_launches_per_year$Year)
+
+most_launches_per_year %>% 
+  ggplot(aes(reorder(Year, Percent), y=Percent, fill=Percent)) +
+  geom_bar(position=position_dodge(), stat="identity") +
+  geom_text(aes(label = Percent), vjust=0.5, hjust=-0.2) +
+  coord_flip() +
+  #scale_y_continuous(breaks = seq(from=0, to=160, by=10)) +
+  #scale_x_continuous(breaks = seq(from=0, to=100, by=10))
+  scale_fill_continuous(high = MOST_INTENSE_COLOR, low = LEAST_INTENSE_COLOR) +
+  xlab('Year') +
+  ylab('[%] of Launches Globally') +
+  labs(fill='[%] of\nLaunches\nGlobally', 
+       title= 'Top 10 years with the most launches a year.',
+      subtitle=paste0('In ', max_number_of_launches[1], 
+                      ' occurred the highest no. of launches, i.e.,', 
+                      max_number_of_launches[2], '.')
+      )
+```
+
+<!-- > In `r max_number_of_launches[1]` occurred the highest no. of launches - `r max_number_of_launches[2]`. -->
+
+
+### Number of Launches per Year {.no-title .no-padding}
+
+```{r, fig.height=5, fig.width=10}
+# percentages w.r.t. the global number of launches
+years_df %>% 
+  ggplot(aes(x=Year, y=Percent, fill=Percent)) +
+  geom_bar(position=position_dodge(), stat="identity") +
+  theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1, size=6)) +
+  scale_fill_continuous(high = MOST_INTENSE_COLOR, low = LEAST_INTENSE_COLOR) + 
+  ylab('[%] of Launches Globally') +
+  labs(fill='% of\nLaunches\nGlobally', 
+       title='Percentage of launches per year globally.',
+      subtitle=paste0('No. of launches was the highest (~ 100 per year) in 1966-1978, and 2016-2022. ',
+                      'Lowest no. of launches per year was in 2001-2015\n and it ranged from ',
+                      min(years_df[years_df$Year >= 2001 & years_df$Year <= 2015,]$LaunchesCount),' to ',
+                      max(years_df[years_df$Year >= 2001 & years_df$Year <= 2015,]$LaunchesCount), ', ',
+                      min(years_df[years_df$Year >= 2001 & years_df$Year <= 2015,]$Percent),'% and ',
+                      max(years_df[years_df$Year >= 2001 & years_df$Year <= 2015,]$Percent), '% of global launches, respectively.'
+                     )
+      )
+
+# for absolute numbers you can use this
+# years_df %>% 
+#  ggplot(aes(x=Year, y=LaunchesCount, fill=LaunchesCount)) +
+#  geom_bar(position=position_dodge(), stat="identity") +
+#  theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1, size=6)) +
+#  scale_fill_continuous(high = MOST_INTENSE_COLOR, low = LEAST_INTENSE_COLOR) + 
+#  ylab('No. of Launches') +
+#  labs(fill='Number of\nLaunches', 
+#       title=paste(
+#         'The number of launches per year globally for the period', LAUNCH_PERIOD_DOT))
+```
+
+<!-- 
+> No. of launches was the highest (~ 100 per year) in 1966-1978, and 2016-2022. Lowest no. of launches per year was performed in 2001-2015 and it ranged from 
+`r min(years_df[years_df$Year >= 2001 & years_df$Year <= 2015,]$LaunchesCount)`
+(`r min(years_df[years_df$Year >= 2001 & years_df$Year <= 2015,]$Percent)`% of global launches) to 
+`r max(years_df[years_df$Year >= 2001 & years_df$Year <= 2015,]$LaunchesCount)` (`r max(years_df[years_df$Year >= 2001 & years_df$Year <= 2015,]$Percent)`% of global launches). 
+-->
+       
+Rockets {data-orientation=columns}
+====================================================
+Column {data-width=150}
+---------------------------
+
+### Rockets Count
+
+```{r}
+# how many and what type of rockets are used
+# how many times each rocket was used and what is its status (retired or not)
+# how long it served
+
+# first deal with the date and convert it to the right format
+# for some reason the code that works fine in the R script
+# does not work in a R Markdown chunk so here baby steps
+rockets_df <- df %>%
+  select(Rocket, RocketStatus, Date) 
+# convert the Date column from character to the Date
+rockets_df$Date <- mdy(rockets_df$Date)
+
+# now deal with other stuff related to a date column
+# the OperationInYears - is an approximate number (the year is assumed to
+# have 365 days)
+rockets_df <- rockets_df %>%
+  group_by(Rocket, RocketStatus) %>% 
+  summarize(LaunchCount = n(), FirstLaunch = min(Date), LastLaunch = max(Date),
+            OperationInDays = length(seq(from = min(Date), to = max(Date), by = 'day')) - 1,
+            OperationInYears = round(OperationInDays / 365, digits = 1)) %>% 
+  arrange(desc(LaunchCount), desc(Rocket))
+
+rockets_df$CountPerc <- percentage(rockets_df$LaunchCount / sum(rockets_df$LaunchCount), 1)
+
+# hack to make nice labels in PieChart - I need to add a label
+# otherwise I have 0 and 1, so here we go
+# add the column with labels
+rockets_df$RocketStatusName <- with(rockets_df, ifelse(RocketStatus == 0, "Retired", "Active"))
+```
+
+```{r, results='markup'}
+valueBox(nrow(rockets_df), icon="ion-rocket-outline")
+```
+
+### Global No. of Launches
+
+```{r, results='markup'}
+valueBox(total_launches, icon="fa-rocket")
+```
+
+
+Column {.tabset .tabset-fade data-width=500}
+-----------------------
+       
+### Active vs. Retired Rockets {.no-padding .no-title} 
+
+```{r, fig.height=7}
+# how many rockets are active vs retired
+PieChart(RocketStatusName, data=rockets_df,
+  fill=c("red","lightblue"),
+   values_size = 1.5,
+   values = "%",
+   labels_cex = 1.5,
+   cex = 1.5,
+  hole = 0.4,
+   main="Active vs. retired rockets as on 7/29/2022."
+)
+```
+
+### Launches per Rocket{.no-padding .no-title}
+  
+```{r, fig.height=7}
+hist(rockets_df$LaunchCount, xlab = "No. of Launches", 
+     ylab = "Rocket Count",
+     xlim=c(0,500), ylim=c(0,400), labels=TRUE, 
+     main =  paste0('Histogram of no. of launches per rocket.\n', 
+         percentage(359/nrow(rockets_df), 0),
+         '% rockets launched <= 50 times.'                    
+                   )
+)
+```
+
+<!--
+> `r percentage(359/nrow(rockets_df), 0)`% rockets launched $\le$ 50 times.
+-->
+
+
+Column {.tabset .tabset-fade data-width=600}
+----------------------------------------
+
+### Top 10 Rockets {.no-padding .no-title}
+
+```{r, fig.height=6}
+# top 10 most popular rockets
+top10_rockets_df <- rockets_df %>% 
+  select(Rocket, LaunchCount, CountPerc, RocketStatusName, FirstLaunch, LastLaunch, OperationInYears) %>% 
+  arrange(desc(LaunchCount)) %>% 
+  head(10) 
+```
+
+```{r}
+top10_rockets_df %>% 
+  ggplot(aes(reorder(Rocket, CountPerc), y=CountPerc)) +
+  geom_bar(position=position_dodge(), stat="identity", aes(fill=factor(RocketStatusName), group=1), show.legend = TRUE) +
+  theme(axis.text.x = element_text(angle=0, vjust=.5, hjust=1)) +
+  scale_fill_discrete(labels = c("Active", "Retired")) +
+  #scale_fill_continuous(high = MOST_INTENSE_COLOR, low = LEAST_INTENSE_COLOR) +
+  ylab('[%] of Total No. of Launches') +
+  xlab('Rocket') + 
+  labs(fill="Rocket Status", 
+       title='Top 10 most popular rockets of all times.',
+       subtitle=paste0(top10_rockets_df$Rocket[1], ' was the most popular rocket with\n',
+                      top10_rockets_df$LaunchCount[1], ' launches (',
+                      top10_rockets_df$CountPerc[1], '% of total launches).')) +
+  coord_flip()
+```
+
+
+### Lifespan {.no-title .no-padding}
+       
+```{r, fig.height=6}
+# top 10 rockets serving the longest
+top10_longest_rockets_df <- rockets_df %>% 
+  select(Rocket, LaunchCount, CountPerc, RocketStatusName, FirstLaunch, LastLaunch, OperationInYears) %>% 
+  arrange(desc(OperationInYears)) %>% 
+  head(10) 
+```
+
+```{r}
+hist(rockets_df$OperationInYears, xlab = "Operation in Years", 
+     ylab= "Rocket Count",
+     xlim=c(0,50), ylim=c(0,250), labels=TRUE, breaks=9,
+     main = paste0('Histogram of operational rocket lifespan.\n', 
+              percentage(237/nrow(rockets_df), 0), '% rockets operated for <= 5 years.'    )
+     )
+```
+
+
+<!--       
+> `r percentage(237/nrow(rockets_df), 0)`% rockets operated for $\le$ 5 years.
+-->
+       
+### Longest Serving Rockets {.no-title .no-padding}
+
+```{r, fig.height=6}
+top10_longest_rockets_df %>% 
+  ggplot(aes(reorder(Rocket, OperationInYears), y=OperationInYears)) +
+  geom_bar(position=position_dodge(), stat="identity", aes(fill=factor(RocketStatusName), group=1), show.legend = TRUE) +
+  theme(axis.text.x = element_text(angle=0, vjust=.5, hjust=1)) +
+  scale_fill_discrete(labels = c("Active", "Retired")) +
+  #scale_fill_continuous(high = MOST_INTENSE_COLOR, low = LEAST_INTENSE_COLOR) +
+  ylab('Years') +
+  xlab('Rocket') +
+  labs(fill="Rocket Status", 
+       title='Rockets with the longest operational lifespan.',
+       subtitle=paste0(top10_longest_rockets_df[1,][1], 
+                       ' was operational for ', top10_longest_rockets_df[1,][7], 
+                      ' years.\n', top10_longest_rockets_df[3,][1], ' is the longest still active rocket ',
+                       '(', top10_longest_rockets_df[3,][7], ' years).')                      
+      ) +
+  coord_flip()
+```
+
+<!-- 
+> `r top10_longest_rockets_df[1,][1]` was operational for `r top10_longest_rockets_df[1,][7]` years (from `r top10_longest_rockets_df[1,][5]` to `r top10_longest_rockets_df[1,][6]`). Longest serving rocket still active has been `r top10_longest_rockets_df[3,][1]` (`r top10_longest_rockets_df[3,][7]` years).
+-->
+       
+About {data-orientation=rows}
+====================================================
+       
+       
+       
+       
+       
+       
+
+Row 
+---------------------------
+       
+### About {.no-title}
+
+#### Data
+  The data for this study is located at Maven Analytics [https://app.mavenanalytics.io/datasets] "Space Missions" and
+  contains 4,630 records regarding space missions around the world for the period 10/4/1957 - 07/29/2022.
+
+#### License
+ I reached out to the staff at Maven Analytics and they said that the datasets can be freely used.
+
+#### Data Credibility
+  I performed some data credibility check by checking and confirming from other sources some randomly
+  selected observations.
+       
+#### Data Processing
+- I performed cleaning of the data. 
+- Some data is missing, especially the price field.
+- Data has been slightly reformatted compared to the original data for the purpose of the analysis.
+
+       
+Row {data-height=200}
+-----------------------
+
+### Thanks {.no-title}
+       
+#### Thanks 
+       
+Thanks for looking at my work.
+       
+Comments on how it can be done better are always welcome. 
+       
+       
