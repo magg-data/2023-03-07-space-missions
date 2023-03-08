@@ -18,3 +18,15 @@ More specifically, this report finds answers to the following questions
   - Which rockets were used the most?
   - Which rockets served the longest?
 
+# Files:
+* mission-all-fields.csv This is the data that were cleaned and processed (mainly reformatted slightly) for the purpose of this project
+* analysis-report* files
+  - analysis-report.Rmd is the file I used documented the process of data analysis for this project and major findings
+  - analysis-report.html and *.pdf are the output files knitted from analysis-report.Rmd
+* space-missions-flexdashboard* files
+  - space-missions-flexdashboard.Rmd is the source file for the dashboard created with Flexdashboard
+  - space-missions-flexdashboard.html is the output file, knitted from the corresponding Rmd file
+* maven 
+  This folder contains screenshots for the Maven Analytics
+* kaggle
+  These are versions of flexdashboard I used at kaggle.com. Simple import of my original files did not work and I had to reformat the diagrams to adapt it to be digestible at kaggle.com. It was definitely a lot of pain to port the original flexdashboard to kaggle.com with some magic involved such as five empty space to show up the first screen ... Anyway.
